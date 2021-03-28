@@ -33,8 +33,9 @@ fn main() {
             }
         }
 
-        chip8.do_command(&mut canvas);
-
+        if chip8.do_command(&mut canvas) == false {
+            break 'main;
+        }
         chip8.print();
     }
 }

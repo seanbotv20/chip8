@@ -1,3 +1,5 @@
+use rand::prelude::random;
+
 use sdl2::render::Canvas;
 use sdl2::video::Window;
 
@@ -32,23 +34,18 @@ impl Chip8 {
         self.program_counter += count * 2
     }
 
-    fn reset_counter(&mut self) {
-        self.program_counter = PROGRAM_START;
-    }
-
-    pub fn do_command(&mut self, canvas: &mut Canvas<Window>) {
+    pub fn do_command(&mut self, canvas: &mut Canvas<Window>) -> bool {
         let program_index = ((self.program_counter - PROGRAM_START) / 2) as usize;
+
+        if self.program_counter == ((self.program.len() as u16 * 2) + PROGRAM_START) {
+            return false;
+        } else {
+            self.advance_counter(1)
+        }
 
         let command = self.program[program_index];
 
         println!("Byte: {:#04x}", command);
-
-        if self.program_counter == (self.program.len() as u16 * 2 + PROGRAM_START) {
-            self.reset_counter();
-        } else {
-            self.advance_counter(1);
-        }
-
         let command_family = (command >> 12) & 0x000F;
 
         match command_family {
@@ -64,8 +61,11 @@ impl Chip8 {
             0x9 => self.do_9_commands(command),
             0xA => self.do_a_commands(command),
             0xB => self.do_b_commands(command),
+            0xC => self.do_c_commands(command),
             _ => self.pass(),
         };
+
+        return true;
     }
 
     fn pass(&self) {
@@ -202,6 +202,17 @@ impl Chip8 {
         self.program_counter = (command & 0x0FFF) + self.registers[0];
     }
 
+    fn do_c_commands(&mut self, command: u16) {
+        let register_index = ((command >> 8) & 0x000F) as usize;
+        let value = command as u8;
+        self.registers[register_index] = (value & random::<u8>()) as u16;
+    }
+
+    fn do_d_commands(&mut self, command: u16) {
+        let register_index = ((command >> 8) & 0x000F) as usize;
+        let value = command as u8;
+        self.registers[register_index] = (value & random::<u8>()) as u16;
+    }
     pub fn print(&self) {
         println!("Program Counter: {}", self.program_counter);
 

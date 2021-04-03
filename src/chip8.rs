@@ -1,11 +1,13 @@
+use crate::SDLRenderingContext;
 use rand::prelude::random;
 
-use sdl2::render::Canvas;
-use sdl2::video::Window;
+use std::vec::Vec;
 
 const PROGRAM_START: u16 = 0x200;
 
 pub struct Chip8 {
+    context: SDLRenderingContext,
+
     program: Vec<u16>,
     program_counter: u16, // Points to a ROM address
 
@@ -14,11 +16,13 @@ pub struct Chip8 {
 
     registers: [u16; 16],
     v_i: u16,
-    //memory: [u8; 4096],
+    // memory: [u8; 4096],
+
+    // display: [[bool; 32]; 64],
 }
 
 impl Chip8 {
-    pub fn new(path: &str) -> Chip8 {
+    pub fn new(path: &str, context: SDLRenderingContext) -> Chip8 {
         return Chip8 {
             program: Chip8::load_program(path),
             program_counter: PROGRAM_START, // By convention programs start at 0x200
@@ -26,15 +30,30 @@ impl Chip8 {
             stack_pointer: 0,
             registers: [0; 16],
             v_i: 0,
-            //memory: [0; 4096],
+            // memory: [0; 4096],
+            // display: [[false; 32]; 64],
+            context: context,
         };
+    }
+
+    pub fn run(&mut self) {
+        'main: loop {
+            if self.context.run() == false {
+                break 'main;
+            }
+
+            if self.do_command() == false {
+                break 'main;
+            }
+            self.print();
+        }
     }
 
     fn advance_counter(&mut self, count: u16) {
         self.program_counter += count * 2
     }
 
-    pub fn do_command(&mut self, canvas: &mut Canvas<Window>) -> bool {
+    pub fn do_command(&mut self) -> bool {
         let program_index = ((self.program_counter - PROGRAM_START) / 2) as usize;
 
         if self.program_counter == ((self.program.len() as u16 * 2) + PROGRAM_START) {
@@ -49,7 +68,7 @@ impl Chip8 {
         let command_family = (command >> 12) & 0x000F;
 
         match command_family {
-            0x0 => self.do_0_commands(command, canvas),
+            0x0 => self.do_0_commands(command),
             0x1 => self.do_1_commands(command),
             0x2 => self.do_2_commands(command),
             0x3 => self.do_3_commands(command),
@@ -62,6 +81,7 @@ impl Chip8 {
             0xA => self.do_a_commands(command),
             0xB => self.do_b_commands(command),
             0xC => self.do_c_commands(command),
+            // 0xD => self.do_d_commands(command),
             _ => self.pass(),
         };
 
@@ -72,10 +92,10 @@ impl Chip8 {
         println!("Pass")
     }
 
-    fn do_0_commands(&mut self, command: u16, canvas: &mut Canvas<Window>) {
+    fn do_0_commands(&mut self, command: u16) {
         if command == 0x00E0 {
-            canvas.clear();
-            canvas.present();
+            self.context.canvas.clear();
+            self.context.canvas.present();
         } else if command == 0x00EE {
             self.program_counter = self.stack[self.stack_pointer as usize];
             self.stack_pointer -= 1;
@@ -208,11 +228,14 @@ impl Chip8 {
         self.registers[register_index] = (value & random::<u8>()) as u16;
     }
 
-    fn do_d_commands(&mut self, command: u16) {
-        let register_index = ((command >> 8) & 0x000F) as usize;
-        let value = command as u8;
-        self.registers[register_index] = (value & random::<u8>()) as u16;
-    }
+    // fn do_d_commands(&mut self, command: u16) {
+    // let x = ((command >> 8) & 0x000F);
+    // let y = ((command >> 4) & 0x000F);
+
+    // let sprite_location = self.v_i as usize;
+    // let sprite_length = (command & 0x000F) as usize;
+    // }
+
     pub fn print(&self) {
         println!("Program Counter: {}", self.program_counter);
 

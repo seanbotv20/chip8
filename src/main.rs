@@ -1,41 +1,14 @@
 extern crate sdl2;
 
 mod chip8;
-
-use sdl2::event::Event;
-use sdl2::event::WindowEvent;
-
+mod rendering_context;
 use chip8::Chip8;
+use rendering_context::SDLRenderingContext;
 
 fn main() {
-    let _sdl = sdl2::init().unwrap();
-    let video_subsystem = _sdl.video().unwrap();
-    let window = video_subsystem.window("Game", 1280, 320).build().unwrap();
-
-    let mut canvas = window.into_canvas().present_vsync().build().unwrap();
-
-    let mut event_pump = _sdl.event_pump().unwrap();
-
     let path = std::env::args().nth(1).unwrap();
 
-    let mut chip8 = Chip8::new(&path);
+    let mut chip8 = Chip8::new(&path, SDLRenderingContext::new());
 
-    'main: loop {
-        for event in event_pump.poll_iter() {
-            match event {
-                Event::Window { win_event, .. } => {
-                    if win_event == WindowEvent::Close {
-                        break 'main;
-                    }
-                }
-                Event::Quit { .. } => break 'main,
-                _ => {}
-            }
-        }
-
-        if chip8.do_command(&mut canvas) == false {
-            break 'main;
-        }
-        chip8.print();
-    }
+    chip8.run()
 }

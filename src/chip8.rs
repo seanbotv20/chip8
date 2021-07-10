@@ -8,7 +8,7 @@ const PROGRAM_START: u16 = 0x200;
 
 const DISPLAY_HEIGHT: usize = crate::rendering_context::DISPLAY_HEIGHT as usize;
 const DISPLAY_WIDTH: usize = crate::rendering_context::DISPLAY_WIDTH as usize;
-
+const MEMORY_SIZE: usize = 4096;
 pub struct Chip8 {
     context: SDLRenderingContext,
 
@@ -18,9 +18,9 @@ pub struct Chip8 {
     stack: [u16; 16],
     stack_pointer: u8,
 
-    registers: [u16; 16],
+    registers: [u8; 16],
     v_i: u16,
-    memory: [u8; 4096],
+    memory: [u8; MEMORY_SIZE],
     display: [[bool; DISPLAY_HEIGHT]; DISPLAY_WIDTH],
 }
 
@@ -120,7 +120,7 @@ impl Chip8 {
     fn do_3_commands(&mut self, command: u16) {
         let register = (command >> 8) & 0x000F;
 
-        if self.registers[register as usize] == (command & 0x00FF) {
+        if self.registers[register as usize] == (command & 0x00FF) as u8 {
             self.advance_counter(1);
         }
     }
@@ -128,7 +128,7 @@ impl Chip8 {
     fn do_4_commands(&mut self, command: u16) {
         let register = (command >> 8) & 0x000F;
 
-        if self.registers[register as usize] != (command & 0x00FF) {
+        if self.registers[register as usize] != (command & 0x00FF) as u8 {
             self.advance_counter(1);
         }
     }
@@ -144,14 +144,14 @@ impl Chip8 {
 
     fn do_6_commands(&mut self, command: u16) {
         let register = ((command >> 8) & 0x000F) as usize;
-        let value = (command & 0x00FF) as u16;
+        let value = (command & 0x00FF) as u8;
 
         self.registers[register] = value;
     }
 
     fn do_7_commands(&mut self, command: u16) {
         let register = ((command >> 8) & 0x000F) as usize;
-        let value = (command & 0x00FF) as u16;
+        let value = (command & 0x00FF) as u8;
 
         self.registers[register] += value;
     }
@@ -178,13 +178,13 @@ impl Chip8 {
             0x4 => {
                 let (result, overflowed) = register1.overflowing_add(register2);
                 *register1 = result;
-                self.registers[0xF] = overflowed as u16;
+                self.registers[0xF] = overflowed as u8;
             }
             // SUB with borrow
             0x5 => {
                 let (result, overflowed) = register1.overflowing_sub(register2);
                 *register1 = result;
-                self.registers[0xF] = overflowed as u16;
+                self.registers[0xF] = overflowed as u8;
             }
             // Right shift 1 into VF
             0x6 => {
@@ -196,11 +196,11 @@ impl Chip8 {
             0x7 => {
                 let (result, overflowed) = register2.overflowing_sub(*register1);
                 *register1 = result;
-                self.registers[0xF] = overflowed as u16;
+                self.registers[0xF] = overflowed as u8;
             }
             // Left shift 1 into VF
             0xE => {
-                let significant_bit = *register1 & 0x8000;
+                let significant_bit = *register1 & 0x80;
                 *register1 = *register1 << 1;
                 self.registers[0xF] = significant_bit;
             }
@@ -224,13 +224,13 @@ impl Chip8 {
     }
 
     fn do_b_commands(&mut self, command: u16) {
-        self.program_counter = (command & 0x0FFF) + self.registers[0];
+        self.program_counter = (command & 0x0FFF) + self.registers[0] as u16;
     }
 
     fn do_c_commands(&mut self, command: u16) {
         let register_index = ((command >> 8) & 0x000F) as usize;
         let value = command as u8;
-        self.registers[register_index] = (value & random::<u8>()) as u16;
+        self.registers[register_index] = value & random::<u8>();
     }
 
     fn do_d_commands(&mut self, command: u16) {
@@ -255,8 +255,34 @@ impl Chip8 {
         let operation = command & 0x00FF;
 
         match operation {
+            0x07 => self.pass(), // delay timer
+            0x0A => self.pass(), // wait for key press
+            0x15 => self.pass(), // delay timer
+            0x18 => self.pass(), // sound timer
+            0x1E => self.v_i += *register as u16,
             // Only use the last nibble of the register
-            0x29 => self.v_i = (*register & 0x000F) * 5,
+            0x29 => self.v_i = ((*register & 0x000F) * 5) as u16,
+            0x33 => {
+                let hundreds_digit = *register / 100;
+                let tens_digit = (*register - (hundreds_digit * 100)) / 10;
+                let ones_digit = *register - (hundreds_digit * 100) - (tens_digit * 10);
+
+                self.memory[self.v_i as usize] = hundreds_digit;
+                self.memory[(self.v_i + 1) as usize % MEMORY_SIZE] = tens_digit;
+                self.memory[(self.v_i + 2) as usize % MEMORY_SIZE] = ones_digit;
+            }
+            0x55 => {
+                for register_i in 0..(register_index + 1) {
+                    self.memory[(self.v_i + register_i) as usize % MEMORY_SIZE] =
+                        self.registers[register_i as usize]
+                }
+            }
+            0x65 => {
+                for register_i in 0..(register_index + 1) {
+                    self.registers[register_i as usize] =
+                        self.memory[(self.v_i + register_i) as usize % MEMORY_SIZE]
+                }
+            }
             _ => self.pass(),
         }
     }
@@ -296,8 +322,8 @@ impl Chip8 {
     }
 }
 
-fn load_basic_memory() -> [u8; 4096] {
-    let mut memory: [u8; 4096] = [0; 4096];
+fn load_basic_memory() -> [u8; MEMORY_SIZE] {
+    let mut memory: [u8; MEMORY_SIZE] = [0; MEMORY_SIZE];
 
     for i in 0..80 {
         memory[i] = TEXT_SPRITES[i]

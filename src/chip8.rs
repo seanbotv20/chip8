@@ -1,9 +1,13 @@
+use crate::rendering_context::Sprite;
 use crate::SDLRenderingContext;
-use rand::prelude::random;
 
+use rand::prelude::random;
 use std::vec::Vec;
 
 const PROGRAM_START: u16 = 0x200;
+
+const DISPLAY_HEIGHT: usize = crate::rendering_context::DISPLAY_HEIGHT as usize;
+const DISPLAY_WIDTH: usize = crate::rendering_context::DISPLAY_WIDTH as usize;
 
 pub struct Chip8 {
     context: SDLRenderingContext,
@@ -16,9 +20,8 @@ pub struct Chip8 {
 
     registers: [u16; 16],
     v_i: u16,
-    // memory: [u8; 4096],
-
-    // display: [[bool; 32]; 64],
+    memory: [u8; 4096],
+    display: [[bool; DISPLAY_HEIGHT]; DISPLAY_WIDTH],
 }
 
 impl Chip8 {
@@ -30,8 +33,8 @@ impl Chip8 {
             stack_pointer: 0,
             registers: [0; 16],
             v_i: 0,
-            // memory: [0; 4096],
-            // display: [[false; 32]; 64],
+            memory: load_basic_memory(),
+            display: [[false; DISPLAY_HEIGHT]; DISPLAY_WIDTH],
             context: context,
         };
     }
@@ -81,7 +84,7 @@ impl Chip8 {
             0xA => self.do_a_commands(command),
             0xB => self.do_b_commands(command),
             0xC => self.do_c_commands(command),
-            // 0xD => self.do_d_commands(command),
+            0xD => self.do_d_commands(command),
             _ => self.pass(),
         };
 
@@ -94,8 +97,7 @@ impl Chip8 {
 
     fn do_0_commands(&mut self, command: u16) {
         if command == 0x00E0 {
-            self.context.canvas.clear();
-            self.context.canvas.present();
+            self.context.clear();
         } else if command == 0x00EE {
             self.program_counter = self.stack[self.stack_pointer as usize];
             self.stack_pointer -= 1;
@@ -228,20 +230,45 @@ impl Chip8 {
         self.registers[register_index] = (value & random::<u8>()) as u16;
     }
 
-    // fn do_d_commands(&mut self, command: u16) {
-    // let x = ((command >> 8) & 0x000F);
-    // let y = ((command >> 4) & 0x000F);
+    fn do_d_commands(&mut self, command: u16) {
+        let x = ((command >> 8) & 0x000F) as usize;
+        let y = ((command >> 4) & 0x000F) as usize;
 
-    // let sprite_location = self.v_i as usize;
-    // let sprite_length = (command & 0x000F) as usize;
-    // }
+        let sprite_location = self.v_i as usize;
+        let sprite_length = (command & 0x000F) as usize;
+
+        let sprite = self.sprite_from_memory(sprite_location, sprite_length);
+
+        self.apply_sprite(
+            self.registers[x] as usize,
+            self.registers[y] as usize,
+            sprite,
+        );
+    }
+
+    fn sprite_from_memory(&mut self, location: usize, length: usize) -> Sprite {
+        let start = location;
+        let end = start + length;
+
+        return self.memory[start..end].to_vec();
+    }
+
+    fn apply_sprite(&mut self, x: usize, y: usize, sprite: Sprite) {
+        println!("Applying sprite {:?} to {} {}", sprite, x, y);
+
+        for row in 0..sprite.len() {
+            for bit in 0..8 as usize {
+                let adjusted_x = (x + bit) % DISPLAY_WIDTH;
+                let adjusted_y = (y + row) % DISPLAY_HEIGHT;
+                self.display[adjusted_x][adjusted_y] ^= (sprite[row] & (0x1 << (7 - bit))) != 0
+            }
+        }
+
+        self.context.redraw(&self.display)
+    }
 
     pub fn print(&self) {
         println!("Program Counter: {}", self.program_counter);
-
-        for index in 0..16 {
-            println!("V{}: {}", index, self.registers[index as usize]);
-        }
     }
 
     fn load_program(path: &str) -> Vec<u16> {
@@ -253,3 +280,21 @@ impl Chip8 {
             .collect();
     }
 }
+
+fn load_basic_memory() -> [u8; 4096] {
+    let mut memory: [u8; 4096] = [0; 4096];
+
+    for i in 0..80 {
+        memory[i] = TEXT_SPRITES[i]
+    }
+
+    return memory;
+}
+
+const TEXT_SPRITES: [u8; 80] = [
+    0xF0, 0x90, 0x90, 0x90, 0xF0, 0x20, 0x60, 0x20, 0x20, 0x70, 0xF0, 0x10, 0xF0, 0x80, 0xF0, 0xF0,
+    0x10, 0xF0, 0x10, 0xF0, 0x90, 0x90, 0xF0, 0x10, 0x10, 0xF0, 0x80, 0xF0, 0x10, 0xF0, 0xF0, 0x80,
+    0xF0, 0x90, 0xF0, 0xF0, 0x10, 0x20, 0x40, 0x40, 0xF0, 0x90, 0xF0, 0x90, 0xF0, 0xF0, 0x90, 0xF0,
+    0x10, 0xF0, 0xF0, 0x90, 0xF0, 0x90, 0x90, 0xE0, 0x90, 0xE0, 0x90, 0xE0, 0xF0, 0x80, 0x80, 0x80,
+    0xF0, 0xE0, 0x90, 0x90, 0x90, 0xE0, 0xF0, 0x80, 0xF0, 0x80, 0xF0, 0xF0, 0x80, 0xF0, 0x80, 0x80,
+];

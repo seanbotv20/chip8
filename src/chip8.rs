@@ -50,6 +50,8 @@ impl Chip8 {
             }
             self.print();
         }
+
+        std::thread::sleep(std::time::Duration::from_millis(2));
     }
 
     fn advance_counter(&mut self, count: u16) {
@@ -85,6 +87,7 @@ impl Chip8 {
             0xB => self.do_b_commands(command),
             0xC => self.do_c_commands(command),
             0xD => self.do_d_commands(command),
+            0xF => self.do_f_commands(command),
             _ => self.pass(),
         };
 
@@ -244,6 +247,18 @@ impl Chip8 {
             self.registers[y] as usize,
             sprite,
         );
+    }
+
+    fn do_f_commands(&mut self, command: u16) {
+        let register_index = (command >> 8) & 0x000F;
+        let register = &self.registers[register_index as usize];
+        let operation = command & 0x00FF;
+
+        match operation {
+            // Only use the last nibble of the register
+            0x29 => self.v_i = (*register & 0x000F) * 5,
+            _ => self.pass(),
+        }
     }
 
     fn sprite_from_memory(&mut self, location: usize, length: usize) -> Sprite {

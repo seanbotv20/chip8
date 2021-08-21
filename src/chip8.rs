@@ -2,18 +2,17 @@ use crate::rendering_context::Sprite;
 use crate::SDLRenderingContext;
 
 use rand::prelude::random;
-use std::vec::Vec;
 
 const PROGRAM_START: u16 = 0x200;
 
 const DISPLAY_HEIGHT: usize = crate::rendering_context::DISPLAY_HEIGHT as usize;
 const DISPLAY_WIDTH: usize = crate::rendering_context::DISPLAY_WIDTH as usize;
 const MEMORY_SIZE: usize = 4096;
+
 pub struct Chip8 {
     context: SDLRenderingContext,
 
-    program: Vec<u16>,
-    program_counter: u16, // Points to a ROM address
+    program_counter: u16, // Points to a RAM address
 
     stack: [u16; 16],
     stack_pointer: u8,
@@ -27,13 +26,12 @@ pub struct Chip8 {
 impl Chip8 {
     pub fn new(path: &str, context: SDLRenderingContext) -> Chip8 {
         return Chip8 {
-            program: Chip8::load_program(path),
             program_counter: PROGRAM_START, // By convention programs start at 0x200
             stack: [0; 16],
             stack_pointer: 0,
             registers: [0; 16],
             v_i: 0,
-            memory: load_basic_memory(),
+            memory: Chip8::load_memory(path),
             display: [[false; DISPLAY_HEIGHT]; DISPLAY_WIDTH],
             context: context,
         };
@@ -58,40 +56,54 @@ impl Chip8 {
         self.program_counter += count * 2
     }
 
-    pub fn do_command(&mut self) -> bool {
-        let program_index = ((self.program_counter - PROGRAM_START) / 2) as usize;
-
-        if self.program_counter == ((self.program.len() as u16 * 2) + PROGRAM_START) {
-            return false;
+    fn get_command(&mut self) -> Result<u16, &str> {
+        if self.program_counter == (MEMORY_SIZE - 2) as u16 {
+            return Err("Program ran to end of memory");
         } else {
-            self.advance_counter(1)
+            self.advance_counter(1);
+
+            let command_byte1 = self.memory[self.program_counter as usize];
+            println! {"Commandbyte1 {:#04x}", command_byte1}
+            let command_byte2 = self.memory[self.program_counter as usize + 1];
+
+            return Ok(u16::from_be_bytes([command_byte1, command_byte2]));
         }
+    }
 
-        let command = self.program[program_index];
+    pub fn do_command(&mut self) -> bool {
+        let command_result = self.get_command();
 
-        println!("Byte: {:#04x}", command);
-        let command_family = (command >> 12) & 0x000F;
+        match command_result {
+            Ok(command) => {
+                println!("Byte: {:#04x}", command);
+                let command_family = (command >> 12) & 0x000F;
 
-        match command_family {
-            0x0 => self.do_0_commands(command),
-            0x1 => self.do_1_commands(command),
-            0x2 => self.do_2_commands(command),
-            0x3 => self.do_3_commands(command),
-            0x4 => self.do_4_commands(command),
-            0x5 => self.do_5_commands(command),
-            0x6 => self.do_6_commands(command),
-            0x7 => self.do_7_commands(command),
-            0x8 => self.do_8_commands(command),
-            0x9 => self.do_9_commands(command),
-            0xA => self.do_a_commands(command),
-            0xB => self.do_b_commands(command),
-            0xC => self.do_c_commands(command),
-            0xD => self.do_d_commands(command),
-            0xF => self.do_f_commands(command),
-            _ => self.pass(),
+                match command_family {
+                    0x0 => self.do_0_commands(command),
+                    0x1 => self.do_1_commands(command),
+                    0x2 => self.do_2_commands(command),
+                    0x3 => self.do_3_commands(command),
+                    0x4 => self.do_4_commands(command),
+                    0x5 => self.do_5_commands(command),
+                    0x6 => self.do_6_commands(command),
+                    0x7 => self.do_7_commands(command),
+                    0x8 => self.do_8_commands(command),
+                    0x9 => self.do_9_commands(command),
+                    0xA => self.do_a_commands(command),
+                    0xB => self.do_b_commands(command),
+                    0xC => self.do_c_commands(command),
+                    0xD => self.do_d_commands(command),
+                    0xF => self.do_f_commands(command),
+                    _ => self.pass(),
+                };
+
+                return true;
+            }
+            Err(message) => {
+                println!("{}", message);
+                return false;
+            }
         };
-
-        return true;
     }
 
     fn pass(&self) {
@@ -153,7 +165,7 @@ impl Chip8 {
         let register = ((command >> 8) & 0x000F) as usize;
         let value = (command & 0x00FF) as u8;
 
-        self.registers[register] += value;
+        self.registers[register] = self.registers[register].wrapping_add(value);
     }
 
     fn do_8_commands(&mut self, command: u16) {
@@ -259,7 +271,7 @@ impl Chip8 {
             0x0A => self.pass(), // wait for key press
             0x15 => self.pass(), // delay timer
             0x18 => self.pass(), // sound timer
-            0x1E => self.v_i += *register as u16,
+            0x1E => self.v_i = self.v_i.wrapping_add(*register as u16),
             // Only use the last nibble of the register
             0x29 => self.v_i = ((*register & 0x000F) * 5) as u16,
             0x33 => {
@@ -295,8 +307,6 @@ impl Chip8 {
     }
 
     fn apply_sprite(&mut self, x: usize, y: usize, sprite: Sprite) {
-        println!("Applying sprite {:?} to {} {}", sprite, x, y);
-
         for row in 0..sprite.len() {
             for bit in 0..8 as usize {
                 let adjusted_x = (x + bit) % DISPLAY_WIDTH;
@@ -312,30 +322,29 @@ impl Chip8 {
         println!("Program Counter: {}", self.program_counter);
     }
 
-    fn load_program(path: &str) -> Vec<u16> {
+    fn load_memory(path: &str) -> [u8; MEMORY_SIZE] {
+        println! {"Loading program {}", path}
+        let mut memory: [u8; MEMORY_SIZE] = [0; MEMORY_SIZE];
+
+        const TEXT_SPRITES: [u8; 80] = [
+            0xF0, 0x90, 0x90, 0x90, 0xF0, 0x20, 0x60, 0x20, 0x20, 0x70, 0xF0, 0x10, 0xF0, 0x80,
+            0xF0, 0xF0, 0x10, 0xF0, 0x10, 0xF0, 0x90, 0x90, 0xF0, 0x10, 0x10, 0xF0, 0x80, 0xF0,
+            0x10, 0xF0, 0xF0, 0x80, 0xF0, 0x90, 0xF0, 0xF0, 0x10, 0x20, 0x40, 0x40, 0xF0, 0x90,
+            0xF0, 0x90, 0xF0, 0xF0, 0x90, 0xF0, 0x10, 0xF0, 0xF0, 0x90, 0xF0, 0x90, 0x90, 0xE0,
+            0x90, 0xE0, 0x90, 0xE0, 0xF0, 0x80, 0x80, 0x80, 0xF0, 0xE0, 0x90, 0x90, 0x90, 0xE0,
+            0xF0, 0x80, 0xF0, 0x80, 0xF0, 0xF0, 0x80, 0xF0, 0x80, 0x80,
+        ];
+
+        for i in 0..80 {
+            memory[i] = TEXT_SPRITES[i]
+        }
+
         let program = std::fs::read(path).unwrap();
-        return program
-            .chunks_exact(2)
-            .into_iter()
-            .map(|a| u16::from_ne_bytes([a[1], a[0]]))
-            .collect();
+
+        for i in 0..(program.len()) {
+            memory[i + PROGRAM_START as usize] = program[i];
+        }
+
+        return memory;
     }
 }
-
-fn load_basic_memory() -> [u8; MEMORY_SIZE] {
-    let mut memory: [u8; MEMORY_SIZE] = [0; MEMORY_SIZE];
-
-    for i in 0..80 {
-        memory[i] = TEXT_SPRITES[i]
-    }
-
-    return memory;
-}
-
-const TEXT_SPRITES: [u8; 80] = [
-    0xF0, 0x90, 0x90, 0x90, 0xF0, 0x20, 0x60, 0x20, 0x20, 0x70, 0xF0, 0x10, 0xF0, 0x80, 0xF0, 0xF0,
-    0x10, 0xF0, 0x10, 0xF0, 0x90, 0x90, 0xF0, 0x10, 0x10, 0xF0, 0x80, 0xF0, 0x10, 0xF0, 0xF0, 0x80,
-    0xF0, 0x90, 0xF0, 0xF0, 0x10, 0x20, 0x40, 0x40, 0xF0, 0x90, 0xF0, 0x90, 0xF0, 0xF0, 0x90, 0xF0,
-    0x10, 0xF0, 0xF0, 0x90, 0xF0, 0x90, 0x90, 0xE0, 0x90, 0xE0, 0x90, 0xE0, 0xF0, 0x80, 0x80, 0x80,
-    0xF0, 0xE0, 0x90, 0x90, 0x90, 0xE0, 0xF0, 0x80, 0xF0, 0x80, 0xF0, 0xF0, 0x80, 0xF0, 0x80, 0x80,
-];

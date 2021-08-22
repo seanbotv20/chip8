@@ -60,10 +60,10 @@ impl Chip8 {
         if self.program_counter == (MEMORY_SIZE - 2) as u16 {
             return Err("Program ran to end of memory");
         } else {
-            self.advance_counter(1);
-
             let command_byte1 = self.memory[self.program_counter as usize];
             let command_byte2 = self.memory[self.program_counter as usize + 1];
+
+            self.advance_counter(1);
 
             return Ok(u16::from_be_bytes([command_byte1, command_byte2]));
         }
@@ -120,7 +120,7 @@ impl Chip8 {
     }
 
     fn do_1_commands(&mut self, command: u16) {
-        self.program_counter = command & 0x0FFF;
+        self.program_counter = command & 0x0FF;
     }
 
     fn do_2_commands(&mut self, command: u16) {

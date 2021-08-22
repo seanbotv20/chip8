@@ -1,5 +1,6 @@
 use sdl2::event::Event;
 use sdl2::event::WindowEvent;
+use sdl2::keyboard::Scancode;
 use sdl2::pixels::Color;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
@@ -80,6 +81,40 @@ impl SDLRenderingContext {
             .unwrap();
 
         window_surface.update_window().unwrap();
+    }
+
+    // Uses octo keyboard standard
+    // Chip-8 Key  Keyboard
+    // ----------  ---------
+    //   1 2 3 C    1 2 3 4
+    //   4 5 6 D    q w e r
+    //   7 8 9 E    a s d f
+    //   A 0 B F    z x c v
+    pub fn is_key_pressed(&mut self, key: u8) -> bool {
+        let scancode = match key {
+            0x0 => Some(Scancode::X),
+            0x1 => Some(Scancode::Num1),
+            0x2 => Some(Scancode::Num2),
+            0x3 => Some(Scancode::Num3),
+            0x4 => Some(Scancode::Q),
+            0x5 => Some(Scancode::W),
+            0x6 => Some(Scancode::E),
+            0x7 => Some(Scancode::A),
+            0x8 => Some(Scancode::S),
+            0x9 => Some(Scancode::D),
+            0xA => Some(Scancode::Z),
+            0xB => Some(Scancode::C),
+            0xC => Some(Scancode::Num4),
+            0xD => Some(Scancode::R),
+            0xE => Some(Scancode::F),
+            0xF => Some(Scancode::V),
+            _ => None,
+        };
+
+        return match scancode {
+            Some(code) => self.event_pump.keyboard_state().is_scancode_pressed(code),
+            None => false,
+        };
     }
 
     pub fn run(&mut self) -> bool {

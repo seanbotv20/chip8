@@ -63,7 +63,6 @@ impl Chip8 {
             self.advance_counter(1);
 
             let command_byte1 = self.memory[self.program_counter as usize];
-            println! {"Commandbyte1 {:#04x}", command_byte1}
             let command_byte2 = self.memory[self.program_counter as usize + 1];
 
             return Ok(u16::from_be_bytes([command_byte1, command_byte2]));
@@ -93,6 +92,7 @@ impl Chip8 {
                     0xB => self.do_b_commands(command),
                     0xC => self.do_c_commands(command),
                     0xD => self.do_d_commands(command),
+                    0xE => self.do_e_commands(command),
                     0xF => self.do_f_commands(command),
                     _ => self.pass(),
                 };
@@ -261,6 +261,28 @@ impl Chip8 {
         );
     }
 
+    fn do_e_commands(&mut self, command: u16) {
+        let operation = command & 0x00FF;
+
+        let register_index = ((command >> 8) & 0x000F) as usize;
+
+        let key = self.registers[register_index];
+
+        match operation {
+            0x9E => {
+                if self.context.is_key_pressed(key) {
+                    self.advance_counter(1);
+                }
+            }
+            0xA1 => {
+                if !self.context.is_key_pressed(key) {
+                    self.advance_counter(1)
+                }
+            }
+            _ => self.pass(),
+        }
+    }
+
     fn do_f_commands(&mut self, command: u16) {
         let register_index = (command >> 8) & 0x000F;
         let register = &self.registers[register_index as usize];
@@ -319,7 +341,7 @@ impl Chip8 {
     }
 
     pub fn print(&self) {
-        println!("Program Counter: {}", self.program_counter);
+        println!("Program Counter: {:x}", self.program_counter);
     }
 
     fn load_memory(path: &str) -> [u8; MEMORY_SIZE] {

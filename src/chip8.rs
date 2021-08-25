@@ -120,7 +120,7 @@ impl Chip8 {
     }
 
     fn do_1_commands(&mut self, command: u16) {
-        self.program_counter = command & 0x0FF;
+        self.program_counter = command & 0x0FFF;
     }
 
     fn do_2_commands(&mut self, command: u16) {

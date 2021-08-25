@@ -1,5 +1,6 @@
+use crate::rendering_context::SDLRenderingContext;
 use crate::rendering_context::Sprite;
-use crate::SDLRenderingContext;
+use crate::timer::Timer;
 
 use rand::prelude::random;
 
@@ -21,6 +22,8 @@ pub struct Chip8 {
     v_i: u16,
     memory: [u8; MEMORY_SIZE],
     display: [[bool; DISPLAY_HEIGHT]; DISPLAY_WIDTH],
+
+    main_timer: Timer,
 }
 
 impl Chip8 {
@@ -34,10 +37,12 @@ impl Chip8 {
             memory: Chip8::load_memory(path),
             display: [[false; DISPLAY_HEIGHT]; DISPLAY_WIDTH],
             context: context,
+            main_timer: Timer::new(360),
         };
     }
 
     pub fn run(&mut self) {
+        self.main_timer.reset();
         'main: loop {
             if self.context.run() == false {
                 break 'main;
@@ -47,9 +52,9 @@ impl Chip8 {
                 break 'main;
             }
             self.print();
-        }
 
-        std::thread::sleep(std::time::Duration::from_millis(2));
+            self.main_timer.wait_for_next_tick();
+        }
     }
 
     fn advance_counter(&mut self, count: u16) {

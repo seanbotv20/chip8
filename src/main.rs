@@ -1,7 +1,6 @@
-extern crate sdl2;
-
 mod chip8;
 mod rendering_context;
+mod timer;
 
 use chip8::Chip8;
 use rendering_context::SDLRenderingContext;

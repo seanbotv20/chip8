@@ -29,7 +29,7 @@ pub struct Chip8 {
 impl Chip8 {
     pub fn new(path: &str, context: SDLRenderingContext) -> Chip8 {
         return Chip8 {
-            program_counter: PROGRAM_START, // By convention programs start at 0x200
+            program_counter: PROGRAM_START,
             stack: [0; 16],
             stack_pointer: 0,
             registers: [0; 16],
@@ -226,10 +226,10 @@ impl Chip8 {
     }
 
     fn do_9_commands(&mut self, command: u16) {
-        let register1 = ((command >> 8) & 0x000F) as usize;
-        let register2 = ((command >> 4) & 0x000F) as usize;
+        let register1_index = ((command >> 8) & 0x000F) as usize;
+        let register2_index = ((command >> 4) & 0x000F) as usize;
 
-        if self.registers[register1] == self.registers[register2] {
+        if self.registers[register1_index] != self.registers[register2_index] {
             self.advance_counter(1);
         }
     }

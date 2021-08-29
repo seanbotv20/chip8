@@ -122,6 +122,7 @@ impl Chip8 {
 
     fn do_0_commands(&mut self, command: u16) {
         if command == 0x00E0 {
+            self.display = [[false; DISPLAY_HEIGHT]; DISPLAY_WIDTH];
             self.context.clear();
         } else if command == 0x00EE {
             self.program_counter = self.stack[self.stack_pointer as usize];

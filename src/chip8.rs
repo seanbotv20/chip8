@@ -1,6 +1,6 @@
 use crate::rendering_context::SDLRenderingContext;
 use crate::rendering_context::Sprite;
-use crate::timer::Timer;
+use crate::timer::{DelayTimer, MainTimer};
 
 use rand::prelude::random;
 
@@ -23,7 +23,8 @@ pub struct Chip8 {
     memory: [u8; MEMORY_SIZE],
     display: [[bool; DISPLAY_HEIGHT]; DISPLAY_WIDTH],
 
-    main_timer: Timer,
+    main_timer: MainTimer,
+    delay_timer: DelayTimer,
 }
 
 impl Chip8 {
@@ -37,13 +38,17 @@ impl Chip8 {
             memory: Chip8::load_memory(path),
             display: [[false; DISPLAY_HEIGHT]; DISPLAY_WIDTH],
             context: context,
-            main_timer: Timer::new(360),
+            main_timer: MainTimer::new(360),
+            delay_timer: DelayTimer::new(),
         };
     }
 
     pub fn run(&mut self) {
         self.main_timer.reset();
+
         'main: loop {
+            self.delay_timer.update();
+
             if self.context.run() == false {
                 break 'main;
             }
@@ -290,13 +295,15 @@ impl Chip8 {
 
     fn do_f_commands(&mut self, command: u16) {
         let register_index = (command >> 8) & 0x000F;
-        let register = &self.registers[register_index as usize];
+        let register = &mut self.registers[register_index as usize];
         let operation = command & 0x00FF;
 
         match operation {
-            0x07 => self.pass(), // delay timer
+            0x07 => {
+                *register = self.delay_timer.get();
+            }
             0x0A => self.pass(), // wait for key press
-            0x15 => self.pass(), // delay timer
+            0x15 => self.delay_timer.set(*register),
             0x18 => self.pass(), // sound timer
             0x1E => self.v_i = self.v_i.wrapping_add(*register as u16),
             // Only use the last nibble of the register

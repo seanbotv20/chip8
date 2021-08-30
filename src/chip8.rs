@@ -9,6 +9,7 @@ const PROGRAM_START: u16 = 0x200;
 const DISPLAY_HEIGHT: usize = crate::rendering_context::DISPLAY_HEIGHT as usize;
 const DISPLAY_WIDTH: usize = crate::rendering_context::DISPLAY_WIDTH as usize;
 const MEMORY_SIZE: usize = 4096;
+const MAIN_CLOCK_HZ: u16 = 360;
 
 pub struct Chip8 {
     context: SDLRenderingContext,
@@ -38,7 +39,7 @@ impl Chip8 {
             memory: Chip8::load_memory(path),
             display: [[false; DISPLAY_HEIGHT]; DISPLAY_WIDTH],
             context: context,
-            main_timer: MainTimer::new(360),
+            main_timer: MainTimer::new(MAIN_CLOCK_HZ),
             delay_timer: DelayTimer::new(),
         };
     }

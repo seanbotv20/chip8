@@ -2,7 +2,7 @@ use std::cmp;
 use std::thread;
 use std::time::{Duration, Instant};
 
-const DELAY_INTERVAL: Duration = Duration::from_secs(1);
+const DELAY_INTERVAL: Duration = Duration::from_nanos(1000000000 / 60);
 
 pub struct MainTimer {
     hz: u16,
@@ -22,7 +22,7 @@ impl MainTimer {
     }
 
     pub fn wait_for_next_tick(&mut self) {
-        let time_to_wait = Duration::from_nanos(100000000 / self.hz as u64);
+        let time_to_wait = Duration::from_nanos(1000000000 / self.hz as u64);
         thread::sleep(time_to_wait);
         self.last_tick = Instant::now();
     }
@@ -62,7 +62,7 @@ impl DelayTimer {
             if now >= self.last_tick + DELAY_INTERVAL {
                 let duration_since = now - self.last_tick;
 
-                let whole_seconds = (duration_since.as_secs() / DELAY_INTERVAL.as_secs()) as u8;
+                let whole_seconds = (duration_since.as_nanos() / DELAY_INTERVAL.as_nanos()) as u8;
 
                 let next_tick = self.last_tick + DELAY_INTERVAL * (whole_seconds as u32);
 
